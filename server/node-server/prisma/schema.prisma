@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum CandidateStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  // other possible statuses...
+}
+
+model Job {
+  id           Int           @id @default(autoincrement())
+  title        String
+  description  String        @db.Text
+  requirements String        @db.Text
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  appointments Appointment[]
+}
+
+model Candidate {
+  id           Int           @id @default(autoincrement())
+  name         String
+  email        String        @unique
+  password     String
+  phone        String
+  role         String         @default("candidate")
+  notice_period Int?
+  current_ctc  Float?
+  expected_ctc Float?
+  availability Json?
+  status       CandidateStatus @default(new)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  appointments Appointment[]
+  conversations Conversation[]
+}
+
+model Appointment {
+  id          Int       @id @default(autoincrement())
+  date        DateTime
+  status      AppointmentStatus @default(scheduled)
+  notes       String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  jobId       Int
+  job         Job       @relation(fields: [jobId], references: [id])
+  candidateId Int
+  candidate   Candidate @relation(fields: [candidateId], references: [id])
+}
+
+model Conversation {
+  id          Int       @id @default(autoincrement())
+  message     String    @db.Text
+  sender      SenderType
+  timestamp   DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  candidateId Int
+  candidate   Candidate @relation(fields: [candidateId], references: [id])
+}
+
+enum CandidateStatus {
+  new
+  in_progress
+  completed
+  rejected
+}
+
+enum AppointmentStatus {
+  scheduled
+  completed
+  cancelled
+}
+
+enum SenderType {
+  agent
+  candidate
+}

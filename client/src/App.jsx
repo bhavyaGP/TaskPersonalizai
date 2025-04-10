@@ -1,30 +1,29 @@
-import { useState } from 'react';
-import {
-  Box,
-  CssBaseline,
-  AppBar,
-  Toolbar,
-  Typography,
-  Drawer,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  IconButton,
-  Container,
-} from '@mui/material';
-import {
-  Menu as MenuIcon,
-  Work as WorkIcon,
-  People as PeopleIcon,
-  Mic as MicIcon,
-} from '@mui/icons-material';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+
+// Auth Provider
+import { AuthProvider } from './context/AuthContext';
+
+// Layout Components
+import Dashboard from './components/Dashboard';
+
+// Auth Pages
+import Login from './pages/Login';
+import Register from './pages/Register';
+
+// Admin Pages
 import JobManagement from './pages/JobManagement';
 import CandidateManagement from './pages/CandidateManagement';
-import VoiceAgent from './pages/VoiceAgent';
 
-const drawerWidth = 240;
+// Candidate Pages
+import VoiceAgent from './pages/VoiceAgent';
+import Profile from './pages/Profile';
+import Appointments from './pages/Appointments';
+
+// Route Protectors
+import PrivateRoute from './components/PrivateRoute';
+import AdminRoute from './components/AdminRoute';
 
 const theme = createTheme({
   palette: {
@@ -38,125 +37,39 @@ const theme = createTheme({
 });
 
 const App = () => {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState('jobs');
-
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
-  };
-
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'jobs':
-        return <JobManagement />;
-      case 'candidates':
-        return <CandidateManagement />;
-      case 'voice':
-        return <VoiceAgent />;
-      default:
-        return <JobManagement />;
-    }
-  };
-
-  const drawer = (
-    <div>
-      <Toolbar />
-      <List>
-        <ListItem button onClick={() => setCurrentPage('jobs')}>
-          <ListItemIcon>
-            <WorkIcon />
-          </ListItemIcon>
-          <ListItemText primary="Job Management" />
-        </ListItem>
-        <ListItem button onClick={() => setCurrentPage('candidates')}>
-          <ListItemIcon>
-            <PeopleIcon />
-          </ListItemIcon>
-          <ListItemText primary="Candidate Management" />
-        </ListItem>
-        <ListItem button onClick={() => setCurrentPage('voice')}>
-          <ListItemIcon>
-            <MicIcon />
-          </ListItemIcon>
-          <ListItemText primary="Voice Agent" />
-        </ListItem>
-      </List>
-    </div>
-  );
-
   return (
     <ThemeProvider theme={theme}>
-      <Box sx={{ display: 'flex' }}>
-        <CssBaseline />
-        <AppBar
-          position="fixed"
-          sx={{
-            width: { sm: `calc(100% - ${drawerWidth}px)` },
-            ml: { sm: `${drawerWidth}px` },
-          }}
-        >
-          <Toolbar>
-            <IconButton
-              color="inherit"
-              aria-label="open drawer"
-              edge="start"
-              onClick={handleDrawerToggle}
-              sx={{ mr: 2, display: { sm: 'none' } }}
-            >
-              <MenuIcon />
-            </IconButton>
-            <Typography variant="h6" noWrap component="div">
-              Interview Scheduling System
-            </Typography>
-          </Toolbar>
-        </AppBar>
-        <Box
-          component="nav"
-          sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
-        >
-          <Drawer
-            variant="temporary"
-            open={mobileOpen}
-            onClose={handleDrawerToggle}
-            ModalProps={{
-              keepMounted: true, // Better open performance on mobile.
-            }}
-            sx={{
-              display: { xs: 'block', sm: 'none' },
-              '& .MuiDrawer-paper': {
-                boxSizing: 'border-box',
-                width: drawerWidth,
-              },
-            }}
-          >
-            {drawer}
-          </Drawer>
-          <Drawer
-            variant="permanent"
-            sx={{
-              display: { xs: 'none', sm: 'block' },
-              '& .MuiDrawer-paper': {
-                boxSizing: 'border-box',
-                width: drawerWidth,
-              },
-            }}
-            open
-          >
-            {drawer}
-          </Drawer>
-        </Box>
-        <Box
-          component="main"
-          sx={{
-            flexGrow: 1,
-            p: 3,
-            width: { sm: `calc(100% - ${drawerWidth}px)` },
-          }}
-        >
-          <Toolbar />
-          <Container maxWidth="lg">{renderPage()}</Container>
-        </Box>
-      </Box>
+      <CssBaseline />
+      <AuthProvider>
+        <Router>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/" element={<Navigate to="/login" replace />} />
+
+            {/* Protected Routes - Require authentication */}
+            <Route element={<PrivateRoute />}>
+              <Route path="/dashboard" element={<Dashboard />}>
+                {/* Admin Routes */}
+                <Route element={<AdminRoute />}>
+                  <Route path="jobs" element={<JobManagement />} />
+                  <Route path="candidates" element={<CandidateManagement />} />
+                </Route>
+
+                {/* Candidate Routes */}
+                <Route path="profile" element={<Profile />} />
+                <Route path="appointments" element={<Appointments />} />
+                <Route path="voice-agent" element={<VoiceAgent />} />
+                <Route index element={<Navigate to="/dashboard/profile" replace />} />
+              </Route>
+            </Route>
+
+            {/* Catch all - redirect to login */}
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </Router>
+      </AuthProvider>
     </ThemeProvider>
   );
 };

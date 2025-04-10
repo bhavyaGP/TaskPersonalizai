@@ -26,7 +26,6 @@ const JobManagement = () => {
     description: '',
     requirements: '',
   });
-
   useEffect(() => {
     fetchJobs();
   }, []);
@@ -73,9 +72,9 @@ const JobManagement = () => {
     e.preventDefault();
     try {
       if (editingJob) {
-        await axios.put(`http://localhost:3000/api/nodeserver/jobs/${editingJob.id}`, formData);
+        await axios.put(`http://localhost:3001/${editingJob.id}`, formData);
       } else {
-        await axios.post('http://localhost:3000/api/nodeserver/jobs', formData);
+        await axios.post('http://localhost:3001/jobs', formData);
       }
       fetchJobs();
       handleCloseDialog();
@@ -86,7 +85,7 @@ const JobManagement = () => {
 
   const handleDelete = async (jobId) => {
     try {
-      await axios.delete(`http://localhost:3000/api/nodeserver/jobs/${jobId}`);
+      await axios.delete(`http://localhost:3001/jobs/${jobId}`);
       fetchJobs();
     } catch (error) {
       console.error('Error deleting job:', error);

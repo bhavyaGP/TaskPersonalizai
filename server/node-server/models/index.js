@@ -71,6 +71,16 @@ const Candidate = sequelize.define('Candidate', {
   status: {
     type: DataTypes.ENUM('new', 'in_progress', 'completed', 'rejected'),
     defaultValue: 'new'
+  },
+  //add email and password
+  email: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true
+  },
+  password: {
+    type: DataTypes.STRING,
+    allowNull: false
   }
 });
 

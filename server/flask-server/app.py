@@ -1,233 +1,164 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
 import os
 import json
-import spacy
-import re
-from dotenv import load_dotenv
-import pyttsx3
-import speech_recognition as sr
 import tempfile
-import io
-import requests
 import subprocess
-from pydub import AudioSegment
+import traceback
+import requests
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import speech_recognition as sr
+from dotenv import load_dotenv
 
+# Initialize Flask app
 load_dotenv()
-
 app = Flask(__name__)
 CORS(app)
 
-# Initialize spaCy
-nlp = spacy.load("en_core_web_sm")
+# FFmpeg configuration
+def configure_ffmpeg():
+    """Configure FFmpeg path and verify it works"""
+    try:
+        # Check if FFmpeg is in PATH
+        subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True, check=True)
+        print("FFmpeg found in PATH")
+        return True
+    except (subprocess.SubprocessError, FileNotFoundError):
+        # Add your custom FFmpeg path here
+        ffmpeg_path = r"C:\Users\91878\Desktop\ffmpeg\bin"  # Modify this path as needed
+        if os.path.exists(os.path.join(ffmpeg_path, 'ffmpeg.exe')):
+            os.environ["PATH"] = os.pathsep.join([os.environ["PATH"], ffmpeg_path])
+            try:
+                subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True, check=True)
+                print(f"FFmpeg configured at: {ffmpeg_path}")
+                return True
+            except (subprocess.SubprocessError, FileNotFoundError):
+                print(f"FFmpeg found at {ffmpeg_path} but failed to execute")
+                return False
+        print("WARNING: FFmpeg not found. Audio processing will fail.")
+        return False
 
-# Initialize pyttsx3
-engine = pyttsx3.init()
+# Check FFmpeg availability at startup
+ffmpeg_available = configure_ffmpeg()
 
-def extract_entities(text):
-    doc = nlp(text)
-    entities = {
-        "notice_period": None,
-        "current_ctc": None,
-        "expected_ctc": None,
-        "availability": None
-    }
-    
-    # Extract notice period
-    notice_pattern = r'(\d+)\s*(?:month|months|week|weeks|day|days)'
-    notice_match = re.search(notice_pattern, text.lower())
-    if notice_match:
-        entities["notice_period"] = int(notice_match.group(1))
-    
-    # Extract CTC values
-    ctc_pattern = r'(\d+(?:\.\d+)?)\s*(?:lakh|lacs|lac|L|LPA)'
-    ctc_matches = re.findall(ctc_pattern, text.lower())
-    if len(ctc_matches) >= 2:
-        entities["current_ctc"] = float(ctc_matches[0])
-        entities["expected_ctc"] = float(ctc_matches[1])
-    
-    # Extract availability
-    availability_keywords = ["available", "free", "can do", "would like"]
-    for keyword in availability_keywords:
-        if keyword in text.lower():
-            entities["availability"] = True
-            break
-    
-    return entities
+def extract_text_from_audio(audio_path, output_wav_path):
+    """Convert audio to WAV and extract text using speech recognition"""
+    if not ffmpeg_available:
+        raise Exception("FFmpeg not configured properly - please install FFmpeg")
+
+    # Convert audio to WAV format
+    try:
+        subprocess.run([
+            'ffmpeg',
+            '-i', audio_path,
+            '-ar', '16000',  # 16kHz sample rate
+            '-ac', '1',      # Mono channel
+            '-y',            # Overwrite output
+            output_wav_path
+        ], capture_output=True, text=True, check=True)
+        print(f"Successfully converted audio to WAV: {output_wav_path}")
+    except subprocess.SubprocessError as e:
+        raise Exception(f"Audio conversion failed: {str(e.stderr) if hasattr(e, 'stderr') else str(e)}")
+
+    # Perform speech recognition
+    recognizer = sr.Recognizer()
+    try:
+        with sr.AudioFile(output_wav_path) as source:
+            audio_data = recognizer.record(source)
+            text = recognizer.recognize_google(audio_data)
+            print(f"Recognized text: {text}")
+            return text.strip()
+    except sr.UnknownValueError:
+        print("Could not understand audio")
+        return ""
+    except sr.RequestError as e:
+        raise Exception(f"Speech recognition API error: {str(e)}")
 
 @app.route('/process-speech', methods=['POST'])
 def process_speech():
+    """Process uploaded audio file and send results to Node.js server"""
+    # Validate request
     if 'audio' not in request.files:
-        print("No audio file found in request")
+        print("No audio file in request")
         return jsonify({'error': 'No audio file provided'}), 400
     
     audio_file = request.files['audio']
     candidate_id = request.form.get('candidateId')
     
-    print(f"Received audio file for candidate {candidate_id}")
-    print(f"Audio file details:")
-    print(f"- Filename: {audio_file.filename if audio_file.filename else 'blob'}")
-    print(f"- Content type: {audio_file.content_type}")
-    
-    # Save the audio file temporarily with correct extension
-    suffix = '.webm'  # WebM files with Opus codec
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temp_audio:
-        temp_path = temp_audio.name
-        audio_file.save(temp_path)
-        print(f"Saved audio file to: {temp_path}")
+    if not candidate_id:
+        print("No candidate ID provided")
+        return jsonify({'error': 'No candidate ID provided'}), 400
+
+    print(f"Processing audio for candidate: {candidate_id}")
+    print(f"Audio file: {audio_file.filename if audio_file.filename else 'blob'}")
+    print(f"Content type: {audio_file.content_type}")
+
+    # Create temporary files
+    temp_dir = tempfile.gettempdir()
+    input_path = os.path.join(temp_dir, f"input_{candidate_id}.webm")  # Assuming webm from browser
+    wav_path = os.path.join(temp_dir, f"output_{candidate_id}.wav")
     
     try:
-        # Convert WebM to WAV using pydub
-        print("Converting WebM to WAV...")
-        # Ensure FFmpeg is available for WebM/Opus conversion
-        wav_path = temp_path.replace('.webm', '.wav')
+        # Save uploaded audio
+        audio_file.save(input_path)
+        print(f"Saved audio to: {input_path}")
+
+        # Extract text
+        text = extract_text_from_audio(input_path, wav_path)
         
+        # Prepare payload for Node.js server
+        node_url = 'http://localhost:3000/api/nodeserver/process-candidate-data'
+        payload = {
+            'candidateId': candidate_id,
+            'text': text,
+            'processedAt': '2025-04-10'  # Current date as per your requirement
+        }
+        
+        # Send to Node.js server
+        print(f"Sending data to Node.js server: {node_url}")
         try:
-            # Try using pydub for conversion
-            audio = AudioSegment.from_file(temp_path)  # Let pydub detect format
-            audio.export(wav_path, format="wav")
-            print(f"Converted to WAV using pydub: {wav_path}")
-        except Exception as e:
-            print(f"Error converting with pydub: {str(e)}")
-            # If pydub fails, try direct FFmpeg (if available)
-            try:
-                command = [
-                    'ffmpeg',
-                    '-i', temp_path,
-                    '-ar', '16000',  # 16kHz sample rate for better speech recognition
-                    '-ac', '1',      # Mono channel
-                    '-y',            # Overwrite output file
-                    wav_path
-                ]
-                subprocess.run(command, check=True)
-                print(f"Converted to WAV using FFmpeg: {wav_path}")
-            except Exception as ffmpeg_error:
-                print(f"Error converting with FFmpeg: {str(ffmpeg_error)}")
-                return jsonify({'error': 'Failed to convert audio format'}), 500
-        
-        # Process the audio file with SpeechRecognition
-        print("Processing audio with SpeechRecognition...")
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(wav_path) as source:
-            audio_data = recognizer.record(source)
-            try:
-                print("Attempting speech recognition...")
-                text = recognizer.recognize_google(audio_data)
-                print(f"Recognized text: {text}")
-            except sr.UnknownValueError:
-                print("Could not understand audio")
-                text = ""
-                return jsonify({'error': 'Could not understand audio'}), 400
-            except sr.RequestError as e:
-                print(f"Speech recognition API error: {str(e)}")
-                return jsonify({'error': 'API unavailable'}), 500
-        
-        # Extract entities
-        print("Extracting entities from text...")
-        entities = extract_entities(text)
-        print(f"Extracted entities: {entities}")
-        
-        # Send data to Node.js server to update database (with error handling)
-        try:
-            print("Sending data to Node.js server...")
-            node_response = requests.post(
-                'http://localhost:3001/process-candidate-data',
-                json={
-                    'candidateId': candidate_id,
-                    'entities': entities,
-                    'text': text.strip()
-                },
-                timeout=5  # Add timeout to prevent hanging
-            )
-            if node_response.status_code != 200:
-                print(f"Error updating database: {node_response.text}")
-            else:
-                print("Successfully updated database")
+            response = requests.post(node_url, json=payload, timeout=10)
+            response.raise_for_status()
+            print("Successfully sent data to Node.js server")
         except requests.exceptions.RequestException as e:
-            print(f"Error connecting to Node.js server: {str(e)}")
-            # Continue processing even if Node.js server is unreachable
-        
+            print(f"Failed to send to Node.js server: {str(e)}")
+            return jsonify({
+                'text': text,
+                'candidateId': candidate_id,
+                'warning': f'Failed to update Node.js server: {str(e)}'
+            }), 200
+
+        # Successful response
         return jsonify({
-            'text': text.strip(),
-            'entities': entities
-        })
-        
+            'text': text,
+            'candidateId': candidate_id,
+            'status': 'processed'
+        }), 200
+
     except Exception as e:
         print(f"Error processing audio: {str(e)}")
-        import traceback
-        traceback.print_exc()  # Print full traceback for debugging
-        return jsonify({'error': f'Failed to process audio: {str(e)}'}), 500
-        
+        traceback.print_exc()
+        return jsonify({'error': f"Processing failed: {str(e)}"}), 500
+    
     finally:
-        # Clean up
-        print("Cleaning up temporary files...")
-        if 'temp_path' in locals() and os.path.exists(temp_path):
-            os.remove(temp_path)
-            print(f"Removed {temp_path}")
-        if 'wav_path' in locals() and os.path.exists(wav_path):
-            os.remove(wav_path)
-            print(f"Removed {wav_path}")
+        # Clean up temporary files
+        for path in [input_path, wav_path]:
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                    print(f"Cleaned up: {path}")
+                except Exception as e:
+                    print(f"Error cleaning up {path}: {str(e)}")
 
-@app.route('/tts', methods=['POST'])
-def text_to_speech():
-    data = request.get_json()
-    if not data or 'text' not in data:
-        return jsonify({'error': 'No text provided'}), 400
-    
-    text = data['text']
-    
-    # Create a bytes buffer
-    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_output:
-        output_path = temp_output.name
-    
-    # Generate speech with pyttsx3
-    engine.save_to_file(text, output_path)
-    engine.runAndWait()
-    
-    # Read the generated audio file
-    with open(output_path, 'rb') as f:
-        audio_data = f.read()
-    
-    # Clean up
-    os.remove(output_path)
-    
-    return audio_data, 200, {
-        'Content-Type': 'audio/wav',
-        'Content-Disposition': 'attachment; filename=speech.wav'
-    }
-
-# Alternative TTS implementation using gTTS (Google Text-to-Speech)
-@app.route('/gtts', methods=['POST'])
-def google_tts():
-    from gtts import gTTS
-    import io
-    
-    data = request.get_json()
-    if not data or 'text' not in data:
-        return jsonify({'error': 'No text provided'}), 400
-    
-    text = data['text']
-    
-    # Generate speech with gTTS
-    tts = gTTS(text=text, lang='en')
-    
-    # Save to a temporary file
-    with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_output:
-        output_path = temp_output.name
-        tts.save(output_path)
-    
-    # Read the generated audio file
-    with open(output_path, 'rb') as f:
-        audio_data = f.read()
-    
-    # Clean up
-    os.remove(output_path)
-    
-    return audio_data, 200, {
-        'Content-Type': 'audio/mp3',
-        'Content-Disposition': 'attachment; filename=speech.mp3'
-    }
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint"""
+    return jsonify({
+        'status': 'healthy',
+        'ffmpeg_available': ffmpeg_available,
+        'date': '2025-04-10'
+    }), 200
 
 if __name__ == '__main__':
     port = int(os.getenv('FLASK_PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    print(f"Starting server on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=True)
