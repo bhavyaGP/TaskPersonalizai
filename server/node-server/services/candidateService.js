@@ -17,6 +17,20 @@ const createCandidate = async (candidateData) => {
 };
 
 const updateCandidate = async (id, candidateData) => {
+  // Convert notice period to number of days
+  if (candidateData.notice_period) {
+    candidateData.notice_period = parseInt(candidateData.notice_period);
+  }
+  
+  // Convert CTC values from string to float
+  if (candidateData.current_ctc) {
+    candidateData.current_ctc = parseFloat(candidateData.current_ctc);
+  }
+  
+  if (candidateData.expected_ctc) {
+    candidateData.expected_ctc = parseFloat(candidateData.expected_ctc);
+  }
+  
   return await prisma.candidate.update({
     where: { id: parseInt(id) },
     data: candidateData

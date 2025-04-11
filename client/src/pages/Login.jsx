@@ -72,7 +72,12 @@ const Login = () => {
       const result = await login(formData.email, formData.password);
       
       if (result.success) {
-        navigate('/dashboard');
+        // Determine where to redirect based on user role
+        if (result.user.role === 'ADMIN') {
+          navigate('/dashboard/jobs'); // Admin goes to job management
+        } else {
+          navigate('/dashboard/all-jobs'); // Regular user goes to job listing
+        }
       } else {
         setFormError(result.error || 'Login failed. Please check your credentials.');
       }
@@ -151,4 +156,4 @@ const Login = () => {
   );
 };
 
-export default Login; 
+export default Login;

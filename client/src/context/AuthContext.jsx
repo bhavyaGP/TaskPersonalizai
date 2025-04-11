@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import axios from 'axios';
+import { authService } from '../services/api';
 
 const AuthContext = createContext();
 
@@ -17,8 +17,6 @@ export const AuthProvider = ({ children }) => {
     
     if (storedUser && storedToken) {
       setCurrentUser(JSON.parse(storedUser));
-      // Set default auth header for all requests
-      axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
     }
     
     setLoading(false);
@@ -29,27 +27,22 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       setLoading(true);
       
-      const response = await axios.post('http://localhost:3001/auth/login', {
-        email,
-        password
-      });
-      
-      const { token, candidate } = response.data;
+      const response = await authService.login({ email, password });
+      const data = response.data; // Fixed: extract data from response
       
       // Store in local storage
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(candidate));
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.candidate));
       
       // Set for current session
-      setCurrentUser(candidate);
+      setCurrentUser(data.candidate);
       
-      // Set default auth header for all requests
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      return { success: true, user: candidate };
+      return { success: true, user: data.candidate };
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to login');
-      return { success: false, error: err.response?.data?.message || 'Failed to login' };
+      console.error('Login error:', err);
+      const errorMsg = err.response?.data?.error || 'Failed to login';
+      setError(errorMsg);
+      return { success: false, error: errorMsg };
     } finally {
       setLoading(false);
     }
@@ -60,24 +53,22 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       setLoading(true);
       
-      const response = await axios.post('http://localhost:3001/auth/signup', userData);
-      
-      const { token, candidate } = response.data;
+      const response = await authService.register(userData);
+      const data = response.data; // Fixed: extract data from response
       
       // Store in local storage
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(candidate));
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.candidate));
       
       // Set for current session
-      setCurrentUser(candidate);
+      setCurrentUser(data.candidate);
       
-      // Set default auth header for all requests
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      return { success: true, user: candidate };
+      return { success: true, user: data.candidate };
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to register');
-      return { success: false, error: err.response?.data?.message || 'Failed to register' };
+      console.error('Registration error:', err);
+      const errorMsg = err.response?.data?.error || 'Failed to register';
+      setError(errorMsg);
+      return { success: false, error: errorMsg };
     } finally {
       setLoading(false);
     }
@@ -90,13 +81,10 @@ export const AuthProvider = ({ children }) => {
     
     // Clear current session
     setCurrentUser(null);
-    
-    // Remove auth header
-    delete axios.defaults.headers.common['Authorization'];
   };
   
   const checkIsAdmin = () => {
-    return currentUser?.role === 'admin';
+    return currentUser?.role === 'ADMIN';
   };
   
   const value = {

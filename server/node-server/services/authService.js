@@ -1,16 +1,16 @@
-// Change this line
-// const prisma = require('../prisma/client');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const jwt = require('jsonwebtoken');
 
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+
+// Register a new candidate
 const register = async (userData) => {
-  const { name, email, phone, password } = userData;
-  console.log("here");
-
   // Check if user already exists
-  const existingUser = await prisma.Candidate.findFirst({
-    where: { email }
+  const existingUser = await prisma.candidate.findUnique({
+    where: { email: userData.email }
   });
 
   if (existingUser) {
@@ -18,69 +18,71 @@ const register = async (userData) => {
   }
 
   // Hash password
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(userData.password, salt);
 
-  // Create user and candidate in a transaction
-  // Create candidate in a transaction
-  const result = await prisma.$transaction(async (tx) => {
-    // Create candidate
-    const candidate = await tx.Candidate.create({
-      data: {
-        name,
-        email,
-        password: password,
-        phone: phone,
-      }
-    });
-
-    return { user: candidate, candidate };
+  // Create new user in database
+  const newCandidate = await prisma.candidate.create({
+    data: {
+      name: userData.name,
+      email: userData.email,
+      phone: userData.phone || '',
+      password: hashedPassword,
+      status: 'new',
+      role: 'CANDIDATE' // Default role
+    }
   });
+
+  // Remove password from response
+  const { password, ...candidateWithoutPassword } = newCandidate;
+
   // Generate JWT token
   const token = jwt.sign(
-    { id: result.user.id, email: result.user.email, role: result.user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: '24h' }
+    { id: newCandidate.id, email: newCandidate.email },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
   );
 
   return {
     token,
-    candidate: {
-      id: result.candidate.id,
-      name: result.candidate.name,
-      email: result.candidate.email,
-      role: result.user.role
-    }
+    candidate: candidateWithoutPassword
   };
 };
 
+// Login a candidate
 const login = async (email, password) => {
-  // Find user by email
-  const user = await prisma.Candidate.findFirst({
-    where: { email, password: password }
+  console.log("here wit ");
+  
+  // Check if user exists
+  const candidate = await prisma.candidate.findUnique({
+    where: { email }
   });
-
-  if (!user) {
+  console.log(candidate);
+  
+  if (!candidate) {
     throw new Error('Invalid email or password');
   }
 
-  // Verify password
+  // Check if password is correct
+  if (password !== candidate.password) {
+    throw new Error('Invalid email or password');
+  }
+
+  // Remove password from response
+  const { password: candidatePassword, ...candidateWithoutPassword } = candidate;
 
   // Generate JWT token
   const token = jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: '24h' }
+    { id: candidate.id, email: candidate.email },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
   );
-
   return {
     token,
-    candidate: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role
-    }
+    candidate: candidateWithoutPassword
   };
 };
+
 module.exports = {
   register,
   login

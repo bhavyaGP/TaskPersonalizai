@@ -24,7 +24,9 @@ import {
   Person as PersonIcon,
   Event as EventIcon,
   Logout as LogoutIcon,
+  Chat as ChatIcon,
 } from '@mui/icons-material';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 import { useAuth } from '../context/AuthContext';
 
 const drawerWidth = 240;
@@ -82,6 +84,25 @@ const Dashboard = () => {
       path: '/dashboard/voice-agent',
       show: true,
     },
+    {
+      text: 'Jobs',
+      icon: <WorkIcon />,
+      path: '/dashboard/all-jobs',
+      show: true,
+    },
+    {
+      text: 'Conversations',
+      icon: <ChatIcon />,
+      path: '/dashboard/conversations',
+      show: true,
+    },
+    // Add this item for candidates
+    {
+      text: 'My Applications',
+      icon: <AssignmentIcon />,
+      path: '/dashboard/my-applications',
+      show: !isAdmin, // Only show for candidates
+    },
     // Admin only items
     {
       text: 'Job Management',
@@ -93,6 +114,13 @@ const Dashboard = () => {
       text: 'Candidate Management',
       icon: <PeopleIcon />,
       path: '/dashboard/candidates',
+      show: isAdmin,
+    },
+    // Add this item for admins
+    {
+      text: 'Applications',
+      icon: <AssignmentIcon />,
+      path: '/dashboard/applications',
       show: isAdmin,
     },
   ];

@@ -7,11 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum CandidateStatus {
-  ACTIVE
-  INACTIVE
-  PENDING
-  // other possible statuses...
+model Candidate {
+  id            Int            @id @default(autoincrement())
+  name          String
+  email         String         @unique
+  phone         String
+  password      String
+  notice_period Int?
+  current_ctc   Float?
+  expected_ctc  Float?
+  availability  Json?
+  status        CandidateStatus @default(new)
+  role          Role           @default(CANDIDATE)
+  appointments  Appointment[]
+  conversations Conversation[]
+  applications  Application[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 }
 
 model Job {
@@ -19,51 +31,51 @@ model Job {
   title        String
   description  String        @db.Text
   requirements String        @db.Text
+  location     String?
+  jobType      String?
+  salary       String?
+  department   String?
+  appointments Appointment[]
+  applications Application[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
-  appointments Appointment[]
-}
-
-model Candidate {
-  id           Int           @id @default(autoincrement())
-  name         String
-  email        String        @unique
-  password     String
-  phone        String
-  role         String         @default("candidate")
-  notice_period Int?
-  current_ctc  Float?
-  expected_ctc Float?
-  availability Json?
-  status       CandidateStatus @default(new)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  appointments Appointment[]
-  conversations Conversation[]
 }
 
 model Appointment {
-  id          Int       @id @default(autoincrement())
+  id          Int              @id @default(autoincrement())
   date        DateTime
   status      AppointmentStatus @default(scheduled)
-  notes       String?   @db.Text
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  jobId       Int
-  job         Job       @relation(fields: [jobId], references: [id])
+  notes       String?          @db.Text
+  candidate   Candidate        @relation(fields: [candidateId], references: [id])
   candidateId Int
-  candidate   Candidate @relation(fields: [candidateId], references: [id])
+  job         Job              @relation(fields: [jobId], references: [id])
+  jobId       Int
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 }
 
 model Conversation {
+  id          Int     @id @default(autoincrement())
+  message     String  @db.Text
+  sender      Sender
+  candidate   Candidate @relation(fields: [candidateId], references: [id])
+  candidateId Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Check your schema.prisma file to ensure it has the Application model with proper relations
+model Application {
   id          Int       @id @default(autoincrement())
-  message     String    @db.Text
-  sender      SenderType
-  timestamp   DateTime  @default(now())
+  candidateId Int
+  jobId       Int
+  status      String    @default("pending") 
+  note        String?   @db.Text
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  candidateId Int
+  
   candidate   Candidate @relation(fields: [candidateId], references: [id])
+  job         Job       @relation(fields: [jobId], references: [id])
 }
 
 enum CandidateStatus {
@@ -79,7 +91,12 @@ enum AppointmentStatus {
   cancelled
 }
 
-enum SenderType {
+enum Sender {
   agent
   candidate
+}
+
+enum Role {
+  CANDIDATE
+  ADMIN
 }

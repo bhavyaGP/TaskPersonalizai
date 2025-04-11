@@ -1,29 +1,26 @@
-const prisma = require('../prisma/client');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
-const getConversationsByCandidateId = async (candidateId) => {
-  return await prisma.conversation.findMany({
-    where: {
-      candidateId: parseInt(candidateId)
-    },
-    orderBy: {
-      timestamp: 'asc'
-    }
-  });
-};
-
+// Create a new conversation entry
 const createConversation = async (conversationData) => {
   return await prisma.conversation.create({
     data: {
       message: conversationData.message,
       sender: conversationData.sender,
-      candidate: {
-        connect: { id: parseInt(conversationData.candidateId) }
-      }
+      candidateId: parseInt(conversationData.candidateId)
     }
   });
 };
 
+// Get conversations for a specific candidate
+const getConversationsByCandidateId = async (candidateId) => {
+  return await prisma.conversation.findMany({
+    where: { candidateId: parseInt(candidateId) },
+    orderBy: { createdAt: 'asc' }
+  });
+};
+
 module.exports = {
-  getConversationsByCandidateId,
-  createConversation
-}; 
+  createConversation,
+  getConversationsByCandidateId
+};

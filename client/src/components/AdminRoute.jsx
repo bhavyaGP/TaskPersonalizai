@@ -1,26 +1,24 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Loading from './Loading';
 
-const AdminRoute = ({ redirectPath = '/dashboard' }) => {
-  const { isAuthenticated, loading, checkIsAdmin } = useAuth();
+const AdminRoute = ({ children }) => {
+  const { currentUser, loading } = useAuth();
+  const isAdmin = currentUser?.role === 'ADMIN';
 
-  // Show loading state if auth is still being determined
   if (loading) {
-    return <div>Loading...</div>;
+    return <Loading message="Authenticating..." />;
   }
-  
-  // Redirect to login if not authenticated
-  if (!isAuthenticated) {
+
+  if (!currentUser) {
     return <Navigate to="/login" replace />;
   }
-  
-  // Redirect to dashboard if not admin
-  if (!checkIsAdmin()) {
-    return <Navigate to={redirectPath} replace />;
+
+  if (!isAdmin) {
+    return <Navigate to="/dashboard" replace />;
   }
 
-  // Render the admin route
-  return <Outlet />;
+  return children;
 };
 
-export default AdminRoute; 
+export default AdminRoute;

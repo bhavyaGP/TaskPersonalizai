@@ -42,10 +42,10 @@
 }
 
 /* Import all other stylesheets */
-@import 'auth.css';
-@import 'navigation.css';
-@import 'dashboard.css';
-@import 'profile.css';
+@import './styles/auth.css';
+@import './styles/navigation.css';
+@import './styles/dashboard.css';
+@import './styles/profile.css';
 
 /* Base styles */
 * {

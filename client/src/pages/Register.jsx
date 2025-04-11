@@ -96,7 +96,8 @@ const Register = () => {
       const result = await register(userData);
       
       if (result.success) {
-        navigate('/dashboard');
+        // Regular users are registered as candidates
+        navigate('/dashboard/all-jobs');
       } else {
         setFormError(result.error || 'Registration failed. Please try again.');
       }
@@ -212,4 +213,4 @@ const Register = () => {
   );
 };
 
-export default Register; 
+export default Register;

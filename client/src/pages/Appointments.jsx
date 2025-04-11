@@ -19,8 +19,8 @@ import {
   DialogContentText,
   DialogActions,
 } from '@mui/material';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { appointmentService } from '../services/api';
 
 const Appointments = () => {
   const { currentUser } = useAuth();
@@ -38,18 +38,19 @@ const Appointments = () => {
   const fetchAppointments = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:3000/api/nodeserver/appointments');
+      let response;
       
-      // Filter appointments for the current user if not admin
-      const userAppointments = currentUser.role === 'admin' 
-        ? response.data
-        : response.data.filter(apt => apt.candidateId === currentUser.id);
+      if (currentUser.role === 'ADMIN') {
+        response = await appointmentService.getAllAppointments();
+      } else {
+        response = await appointmentService.getAppointmentsByCandidate(currentUser.id);
+      }
       
-      setAppointments(userAppointments);
+      setAppointments(response.data || []);
       setError(null);
     } catch (err) {
-      setError('Failed to load appointments');
       console.error('Error fetching appointments:', err);
+      setError('Failed to load appointments: ' + (err.response?.data?.error || err.message));
     } finally {
       setLoading(false);
     }
@@ -70,14 +71,14 @@ const Appointments = () => {
     
     try {
       setActionLoading(true);
-      await axios.delete(`http://localhost:3000/api/nodeserver/appointments/${deleteId}`);
+      await appointmentService.deleteAppointment(deleteId);
       
       // Update local state
       setAppointments(appointments.filter(apt => apt.id !== deleteId));
       setError(null);
     } catch (err) {
-      setError('Failed to cancel appointment');
       console.error('Error cancelling appointment:', err);
+      setError('Failed to cancel appointment: ' + (err.response?.data?.error || err.message));
     } finally {
       setActionLoading(false);
       handleCloseDeleteDialog();
@@ -194,4 +195,4 @@ const Appointments = () => {
   );
 };
 
-export default Appointments; 
+export default Appointments;

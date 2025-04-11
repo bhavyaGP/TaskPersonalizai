@@ -9,8 +9,8 @@ import {
   CircularProgress,
   Alert,
 } from '@mui/material';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { candidateService } from '../services/api';
 
 const Profile = () => {
   const { currentUser } = useAuth();
@@ -28,14 +28,16 @@ const Profile = () => {
 
   useEffect(() => {
     // Load current user data
-    setFormData({
-      name: currentUser?.name || '',
-      email: currentUser?.email || '',
-      phone: currentUser?.phone || '',
-      notice_period: currentUser?.notice_period || '',
-      current_ctc: currentUser?.current_ctc || '',
-      expected_ctc: currentUser?.expected_ctc || '',
-    });
+    if (currentUser) {
+      setFormData({
+        name: currentUser.name || '',
+        email: currentUser.email || '',
+        phone: currentUser.phone || '',
+        notice_period: currentUser.notice_period || '',
+        current_ctc: currentUser.current_ctc || '',
+        expected_ctc: currentUser.expected_ctc || '',
+      });
+    }
   }, [currentUser]);
 
   const handleChange = (e) => {
@@ -54,18 +56,27 @@ const Profile = () => {
 
     try {
       // Call API to update candidate profile
-      const response = await axios.put(
-        `http://localhost:3001/candidates/${currentUser.id}`,
-        formData
-      );
-
+      const response = await candidateService.updateCandidate(currentUser.id, formData);
       setMessage('Profile updated successfully');
+      
+      // Update stored user data
+      const userData = { ...currentUser, ...formData };
+      localStorage.setItem('user', JSON.stringify(userData));
     } catch (err) {
+      console.error('Profile update error:', err);
       setError(err.response?.data?.error || 'Failed to update profile');
     } finally {
       setLoading(false);
     }
   };
+
+  if (!currentUser) {
+    return (
+      <Box sx={{ textAlign: 'center', py: 8 }}>
+        <Typography>User not found. Please login again.</Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto' }}>
@@ -166,4 +177,4 @@ const Profile = () => {
   );
 };
 
-export default Profile; 
+export default Profile;
